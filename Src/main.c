@@ -7,22 +7,17 @@ void init(void);
 
 void main(void) {
     uint8_t com_flg = 0;
-    bool o1_stand_flag = false;
-    bool o2_stand_flag = false;
-    bool o3_stand_flag = false;
-    bool o4_stand_flag = false;
-    bool o1_status = false;
-    bool o2_status = false;
-    bool o3_status = false;
-    bool o4_status = false;
-    bool o1_recent_status = false;
-    bool o2_recent_status = false;
-    bool o3_recent_status = false;
-    bool o4_recent_status = false;
-    uint32_t o1_error_count = 0;
-    uint32_t o2_error_count = 0;
-    uint32_t o3_error_count = 0;
-    uint32_t o4_error_count = 0;
+    bool ob_enable_flag[4] = {false,false,false,false};
+    bool ob_stand_flag[4] = {false,false,false,false};
+    bool ob_sit_flag[4] = {false,false,false,false};
+    bool ob_status[4] = {false,false,false,false};
+    bool ob_recent_status[4] = {false,false,false,false};
+    uint32_t ob_error_count[4] = {0,0,0,0};
+    bool ob_receive_enable[4] = {true,true,true,true};
+
+    Game_mode game_mode = 0;
+
+    int i;
 
     init();
 
@@ -31,17 +26,28 @@ void main(void) {
         if(I2C_ReceiveCheck()){
             if (com_flg == 0) com_flg = 1;
             if((rcv_data[0] & 0b10000000) >> 7 == 1){
-                snd_data[0] |= 0b10000000;
-                o1_stand_flag = true;
-                o2_stand_flag = true;
-                o3_stand_flag = true;
-                o4_stand_flag = true;
+                game_mode = IN_GAME;
             }else{
-                snd_data[0] &= 0b01111111;
-                o1_stand_flag = false;
-                o2_stand_flag = false;
-                o3_stand_flag = false;
-                o4_stand_flag = false;
+                game_mode = STANDBY;
+            }
+            for(i=0;i<4;i++){
+                if((((rcv_data[0] >> i) & 0b00000001) == 1) && ob_receive_enable[i]){
+                    ob_enable_flag[i] = true;
+                    ob_receive_enable[i] = false;
+                }
+                if(((rcv_data[0] >> i) & 0b00000001) == 0){
+                    ob_receive_enable[i] = true;
+                }
+                if(((rcv_data[1] >> i) & 0b00000001) == 1){
+                    ob_sit_flag[i] = true;
+                    ob_stand_flag[i] = false;
+                }else if(((rcv_data[1] >> (4+i)) & 0b00000001) == 1){
+                    ob_stand_flag[i] = true;
+                    ob_sit_flag[i] = false;
+                }else{
+                    ob_stand_flag[i] = false;
+                    ob_sit_flag[i] = false;
+                }
             }
             CLRWDT();
         }
@@ -49,142 +55,68 @@ void main(void) {
             CLRWDT();
         }
 
-        if(o1_stand_flag){
-            O1_LED = 1;
-            O1_OUT = 1;
-            o1_status = true;
-        }
-        if(!o1_stand_flag && O1_S_1 == 0){
-            O1_LED = 0;
-            O1_OUT = 0;
-            O1_LED = 0;
-            O1_OUT = 0;
-            o1_status = false;
-        }
-        if(o1_recent_status != o1_status){
-            o1_error_count = 0;
-        }
-        if(o1_status){
-            if(O1_S_3 == 1){
-                o1_error_count++;
-            }else{
-                o1_error_count = 0;
+        if(game_mode == IN_GAME){
+            for(i=0;i<4;i++){
+                if(ob_enable_flag[i] || ob_stand_flag[i]){
+                    output(LED,i,1);
+                    output(OUT,i,1);
+                    ob_enable_flag[i] = false;
+                    ob_status[i] = true;
+                }
+                if((!ob_enable_flag[i] && (input(S_1,i) == 0)) || ob_sit_flag[i]){
+                    output(LED,i,0);
+                    output(OUT,i,0);
+                    output(LED,i,0);
+                    output(OUT,i,0);
+                    ob_status[i] = false;
+                }
+                if(ob_recent_status[i] != ob_status[i]){
+                    ob_error_count[i] = 0;
+                }
+                if(ob_status[i]){
+                    if(input(S_3,i) == 1){
+                        ob_error_count[i] += 1;
+                    }else{
+                        ob_error_count[i] = 0;
+                    }
+                    snd_data[1] |= 0b00000001 << i;
+                }else{
+                    if(input(S_2,i) == 1){
+                        ob_error_count[i] += 1;
+                    }else{
+                        ob_error_count[i] = 0;
+                    }
+                    snd_data[1] &= 0b11111111 ^ (0b00000001 << i);
+                }
+                if(ob_error_count[i] >= ERROR_TIME_COUNT){
+                    snd_data[0] |= 0b00000001 << i;
+                }else{
+                    snd_data[0] &= 0b11111111 ^ (0b00000001 << i);
+                }
+                ob_recent_status[i] = ob_status[i];
             }
         }else{
-            if(O1_S_2 == 1){
-                o1_error_count++;
-            }else{
-                o1_error_count = 0;
+            output(LED,4,0);
+            output(OUT,4,0);
+            output(LED,4,0);
+            output(OUT,4,0);
+            for(i=0;i<4;i++){
+                ob_enable_flag[i] = false;
+                ob_stand_flag[i] = false;
+                ob_sit_flag[i] = false;
+                ob_status[i] = false;
+                ob_recent_status[i] = false;
+                ob_error_count[i] = 0;
+                ob_receive_enable[i] = true;
             }
+            snd_data[0] = 0;
+            snd_data[1] = 0;
         }
-        if(o1_error_count >= ERROR_TIME_COUNT){
-            //error_handle
-        }
-        o1_recent_status = o1_status;
-
-        if(o2_stand_flag){
-            O2_LED = 1;
-            O2_OUT = 1;
-            o2_status = true;
-        }
-        if(!o2_stand_flag && O2_S_1 == 0){
-            O2_LED = 0;
-            O2_OUT = 0;
-            O2_LED = 0;
-            O2_OUT = 0;
-            o2_status = false;
-        }
-        if(o2_recent_status != o2_status){
-            o2_error_count = 0;
-        }
-        if(o2_status){
-            if(O2_S_3 == 1){
-                o2_error_count++;
-            }else{
-                o2_error_count = 0;
-            }
-        }else{
-            if(O2_S_2 == 1){
-                o2_error_count++;
-            }else{
-                o2_error_count = 0;
-            }
-        }
-        if(o2_error_count >= ERROR_TIME_COUNT){
-            //error_handle
-        }
-        o2_recent_status = o2_status;
-
-        if(o3_stand_flag){
-            O3_LED = 1;
-            O3_OUT = 1;
-            o3_status = true;
-        }
-        if(!o3_stand_flag && O3_S_1 == 0){
-            O3_LED = 0;
-            O3_OUT = 0;
-            O3_LED = 0;
-            O3_OUT = 0;
-            o3_status = false;
-        }
-        if(o3_recent_status != o3_status){
-            o3_error_count = 0;
-        }
-        if(o3_status){
-            if(O3_S_3 == 1){
-                o3_error_count++;
-            }else{
-                o3_error_count = 0;
-            }
-        }else{
-            if(O3_S_2 == 1){
-                o3_error_count++;
-            }else{
-                o3_error_count = 0;
-            }
-        }
-        if(o3_error_count >= ERROR_TIME_COUNT){
-            //error_handle
-        }
-        o3_recent_status = o3_status;
-
-        if(o4_stand_flag){
-            O4_LED = 1;
-            O4_OUT = 1;
-            o4_status = true;
-        }
-        if(!o4_stand_flag && O4_S_1 == 0){
-            O4_LED = 0;
-            O4_OUT = 0;
-            O4_LED = 0;
-            O4_OUT = 0;
-            o4_status = false;
-        }
-        if(o4_recent_status != o4_status){
-            o4_error_count = 0;
-        }
-        if(o4_status){
-            if(O4_S_3 == 1){
-                o4_error_count++;
-            }else{
-                o4_error_count = 0;
-            }
-        }else{
-            if(O4_S_2 == 1){
-                o4_error_count++;
-            }else{
-                o4_error_count = 0;
-            }
-        }
-        if(o4_error_count >= ERROR_TIME_COUNT){
-            //error_handle
-        }
-        o4_recent_status = o4_status;
     }
 }
 
 void init(void){
-    uint8_t addr = 0x10;
+    uint8_t addr = 0x12;
 
     // Set oscilation
     OSCCON = 0xF0; //PLL　Enable
@@ -203,19 +135,116 @@ void init(void){
     TRISCbits.TRISC6 = 0;
     TRISCbits.TRISC7 = 0;
 
-    O1_LED = 0;
-    O1_OUT = 0;
-    O2_LED = 0;
-    O2_OUT = 0;
-    O3_LED = 0;
-    O3_OUT = 0;
-    O4_LED = 0;
-    O4_OUT = 0;
+    output(LED,4,0);
+    output(OUT,4,0);
 
     // Set watch dog
     WDTCON = 0x13;
 
     I2C_init(addr);//アドレス
+}
+
+void output(Output_t type, int num, int output){
+    if(type == LED){
+        switch (num)
+        {
+        case 0:
+            O1_LED = output;
+            break;
+        case 1:
+            O2_LED = output;
+            break;
+        case 2:
+            O3_LED = output;
+            break;
+        case 3:
+            O4_LED = output;
+            break;
+        case 4:
+            O1_LED = output;
+            O2_LED = output;
+            O3_LED = output;
+            O4_LED = output;
+            break;
+        }
+    }
+    if(type == OUT){
+        switch (num)
+        {
+        case 0:
+            O1_OUT = output;
+            break;
+        case 1:
+            O2_OUT = output;
+            break;
+        case 2:
+            O3_OUT = output;
+            break;
+        case 3:
+            O4_OUT = output;
+            break;
+        case 4:
+            O1_OUT = output;
+            O2_OUT = output;
+            O3_OUT = output;
+            O4_OUT = output;
+            break;
+        }
+    }
+}
+
+int input(Input_t type, int num){
+    if(type == S_1){
+        switch (num)
+        {
+        case 0:
+            return O1_S_1;
+            break;
+        case 1:
+            return O2_S_1;
+            break;
+        case 2:
+            return O3_S_1;
+            break;
+        case 3:
+            return O4_S_1;
+            break;
+        }
+    }
+    if(type == S_2){
+        switch (num)
+        {
+        case 0:
+            return O1_S_2;
+            break;
+        case 1:
+            return O2_S_2;
+            break;
+        case 2:
+            return O3_S_2;
+            break;
+        case 3:
+            return O4_S_2;
+            break;
+        }
+    }
+    if(type == S_3){
+        switch (num)
+        {
+        case 0:
+            return O1_S_3;
+            break;
+        case 1:
+            return O2_S_3;
+            break;
+        case 2:
+            return O3_S_3;
+            break;
+        case 3:
+            return O4_S_3;
+            break;
+        }
+    }
 }
 
 void interrupt  HAND(void){

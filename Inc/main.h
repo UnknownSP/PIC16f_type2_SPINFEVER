@@ -39,7 +39,26 @@ extern "C" {
 #include <pic16f1938.h>
 #include "I2C.h"
 
-#define ERROR_TIME_COUNT 250000
+#define ERROR_TIME_COUNT 15000
+
+typedef enum{
+  STANDBY = 0,
+  IN_GAME = 1,
+} Game_mode;
+
+typedef enum{
+  LED = 0,
+  OUT = 1,
+} Output_t;
+
+typedef enum{
+  S_1 = 0,
+  S_2 = 1,
+  S_3 = 2,
+} Input_t;
+
+void output(Output_t type, int num, int output);
+int input(Input_t type, int num);
 
 //s_1は判定
 //s_2が上側のセンサ
