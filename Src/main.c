@@ -109,8 +109,24 @@ void main(void) {
                 ob_error_count[i] = 0;
                 ob_receive_enable[i] = true;
             }
-            snd_data[0] = 0;
-            snd_data[1] = 0;
+        }
+
+        for(i=0;i<4;i++){
+            if(input(S_1,i) == 0){
+                snd_data[0] |= 0b00000001 << (i+4);
+            }else{
+                snd_data[0] &= (0b11111111 ^ (0b00000001 << (i+4)));
+            }
+            if(input(S_2,i) == 1){
+                snd_data[1] |= 0b00000001 << i;
+            }else{
+                snd_data[1] &= (0b11111111 ^ (0b00000001 << i));
+            }
+            if(input(S_3,i) == 1){
+                snd_data[1] |= 0b00000001 << (i+4);
+            }else{
+                snd_data[1] &= (0b11111111 ^ (0b00000001 << (i+4)));
+            }
         }
     }
 }
