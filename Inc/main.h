@@ -66,23 +66,23 @@ int input(Input_t type, int num);
 #define O1_S_1 RA0
 #define O1_S_2 RA4
 #define O1_S_3 RA5
-#define O1_OUT RB5
-#define O1_LED RB1
+#define O1_OUT LATB5
+#define O1_LED LATB1
 #define O2_S_1 RA1
 #define O2_S_2 RA7
 #define O2_S_3 RA6
-#define O2_OUT RB4
-#define O2_LED RB0
+#define O2_OUT LATB4
+#define O2_LED LATB0
 #define O3_S_1 RA2
 #define O3_S_2 RC0
 #define O3_S_3 RC1
-#define O3_OUT RB3
-#define O3_LED RC7
+#define O3_OUT LATB3
+#define O3_LED LATC7
 #define O4_S_1 RA3
 #define O4_S_2 RC2
 #define O4_S_3 RC5
-#define O4_OUT RB2
-#define O4_LED RC6
+#define O4_OUT LATB2
+#define O4_LED LATC6
 
 
 #ifdef	__cplusplus
